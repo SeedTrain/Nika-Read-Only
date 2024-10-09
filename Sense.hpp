@@ -26,7 +26,6 @@ struct Sense {
             ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoInputs);
-        const ImGuiStyle& style = ImGui::GetStyle();
 
         const ImVec4 leftLockColor = leftLock ? ImVec4(0.4, 1, 0.343, 1) : ImVec4(1, 0.343, 0.475, 1);
         const ImVec4 rightLockColor = rightLock ? ImVec4(0.4, 1, 0.343, 1) : ImVec4(1, 0.343, 0.475, 1);
@@ -52,6 +51,8 @@ struct Sense {
             ImGui::SameLine();
             ImGui::Text("fps: %.2f ", averageFPS);
         }
+        ImGui::SameLine();
+        ImGui::Text("esp: %s ", data::items[data::selectedRadio][0].c_str());
         ImGui::SameLine();
         ImGui::Text("cache: %d", cache);
         ImGui::End();
@@ -81,13 +82,19 @@ struct Sense {
         Vector2D drawPosition;
         Vector2D screenSize = gameCamera->getResolution();
         bool drawVisibleWarning = false;
+        bool drawDroneWarning = false;
         for (int i = 0; i < players->size(); i++) {
             Player* p = players->at(i);
-            if (!cl->SENSE_SHOW_DEAD && !p->currentHealth > 0) continue;
+            if (!p->isItem && !cl->SENSE_SHOW_DEAD && !p->currentHealth > 0) continue;
 
             Vector2D localOriginW2S, headPositionW2S, aboveHeadW2S;
             Vector3D localOrigin3D = p->localOrigin;
-            Vector3D headPosition3D = p->getBonePosition(HitboxType::Head);
+            Vector3D headPosition3D;
+            if (!p->isPlayer && !p->isDrone && !p->isDummie) {
+                headPosition3D = localOrigin3D;
+                headPosition3D.z += 10.0f;
+            } else { headPosition3D = p->getBonePosition(HitboxType::Head); }
+//            Vector3D headPosition3D = p->getBonePosition(HitboxType::Head);
             Vector3D aboveHead3D = headPosition3D;
             aboveHead3D.z += 10.0f;
 
@@ -97,10 +104,10 @@ struct Sense {
 
             // Colors - Players (Enemy)
             ImVec4 enemyBoxColor;
-            if (p->isDrone) enemyBoxColor =        ImVec4(1.00f, 0.00f, 1.00f, 1.00f);
-            else if (p->isKnocked) enemyBoxColor = ImVec4(1.00f, 0.67f, 0.17f, 1.00f);
-            else if (p->isVisible) enemyBoxColor = ImVec4(0.00f, 1.00f, 0.00f, 1.00f);
-            else enemyBoxColor =                   ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
+            if (p->isDrone || p->isItem) enemyBoxColor = ImVec4(1.00f, 0.00f, 1.00f, 1.00f);
+            else if (p->isKnocked) enemyBoxColor =       ImVec4(1.00f, 0.67f, 0.17f, 1.00f);
+            else if (p->isVisible) enemyBoxColor =       ImVec4(0.00f, 1.00f, 0.00f, 1.00f);
+            else enemyBoxColor =                         ImVec4(1.00f, 0.00f, 0.00f, 1.00f);
 
             float distance = util::inchesToMeters(p->distance2DToLocalPlayer);
             if (p->isEnemy && p->isValid() && !p->isLocal && distance < cl->SENSE_MAX_RANGE) {
@@ -122,7 +129,7 @@ struct Sense {
                     //canvas->AddRect(ImVec2(foot.x - (width / 2), foot.y), ImVec2(head.x + (width / 2), head.y + (height / 5)), ImColor(enemyBoxColor), 0.0f, 0, 2);
 
                     // Draw bar
-                    if (cl->SENSE_SHOW_PLAYER_BARS) {
+                    if (cl->SENSE_SHOW_PLAYER_BARS && !p->isItem) {
                         int life = p->currentHealth;
                         int evo = p->currentShield;
                         if (evo > 100)     glColor3f(1.00f, 0.25f, 0.00f); // Red shield
@@ -158,7 +165,7 @@ struct Sense {
                         drawText(canvas, drawPosition, distanceText, enemyBoxColor);
                     }
                     // Draw Name
-                    if (cl->SENSE_SHOW_PLAYER_NAMES) {
+                    if (cl->SENSE_SHOW_PLAYER_NAMES || p->isItem) {
                         if (cl->SENSE_TEXT_BOTTOM)
                             drawPosition = drawPosition.Add(Vector2D(0, 20));
                         else
@@ -170,7 +177,12 @@ struct Sense {
                             if (p->isDrone)
                                 txtName = "Drone";
                             else
-                                txtName = "Dummie";
+                                if (p->isDummie)
+                                    txtName = "Dummie";
+                                else
+                                    for (int arraySize = sizeof(data::items) / sizeof(data::items[0]), i = 0; i < arraySize; i++)
+                                        if (p->itemId == stoi(data::items[i][1])) { txtName = data::items[i][0].c_str(); break; }
+                                    //txtName = data::items[data::selectedRadio][0].c_str();
                         char nameText[256];
                         strncpy(nameText, txtName, sizeof(nameText));
                         drawText(canvas, drawPosition, nameText, enemyBoxColor);
@@ -193,8 +205,11 @@ struct Sense {
                 }
 
                 // Draw Warning
-                if (p->isVisible && !p->isKnocked)
-                    drawVisibleWarning = true;
+                if (p->isDrone)
+                    drawDroneWarning = true;
+                else
+                    if (p->isVisible && !p->isKnocked)
+                        drawVisibleWarning = true;
             }
         }
 
@@ -203,6 +218,16 @@ struct Sense {
             drawPosition = Vector2D(screenSize.x / 2, screenSize.y * 3/4);
             const char* txtWarning;
             txtWarning = "VISIBLE WARNING";
+            char warningText[256];
+            strncpy(warningText, txtWarning, sizeof(warningText));
+            drawText(canvas, drawPosition, warningText, warningColor);
+        }
+
+        if (drawDroneWarning) {
+            ImVec4 warningColor = ImColor(ImVec4(1.00f, 0.00f, 1.00f, 1.00f));
+            drawPosition = Vector2D(screenSize.x / 2, screenSize.y * 3/4 + 20);
+            const char* txtWarning;
+            txtWarning = "DRONE WARNING";
             char warningText[256];
             strncpy(warningText, txtWarning, sizeof(warningText));
             drawText(canvas, drawPosition, warningText, warningColor);
@@ -310,7 +335,10 @@ struct Sense {
 
                 ImVec2 center(single.x, single.y);
                 int radius = 5;
-                canvas->AddCircleFilled(center, radius, ImColor(ImVec4(0.99, 0, 0.99, 0.99)));
+                if (p->isItem)
+                    canvas->AddCircleFilled(center, radius, ImColor(ImVec4(0, 0.99, 0.99, 0.99)));
+                else
+                    canvas->AddCircleFilled(center, radius, ImColor(ImVec4(0.99, 0, 0.99, 0.99)));
                 if (p->isVisible)
                     canvas->AddCircle(center, radius + 2, ImColor(ImVec4(0.99, 0.99, 0, 0.99)));
 
@@ -343,6 +371,28 @@ struct Sense {
             for (int i = 0; i < static_cast<int>(spectators.size()); i++)
                 ImGui::TextColored(ImVec4(1, 0.343, 0.475, 1), "> %s", spectators.at(i).c_str());
         }
+        ImGui::End();
+    }
+
+    void renderMenu() {
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowBgAlpha(0.67f);
+        ImGui::Begin("Items", nullptr,
+            //ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoSavedSettings);
+
+        ImGui::BeginTable("Rows", 5);
+        for (int i = 0; i < static_cast<int>(sizeof data::items / sizeof data::items[0]); i++) {
+            ImGui::TableNextColumn();
+            std::string id = data::items[i][0];
+            if (ImGui::RadioButton(id.c_str(), &data::selectedRadio, i)) printf("%d\n", data::selectedRadio);
+        }
+        ImGui::EndTable();
         ImGui::End();
     }
 };

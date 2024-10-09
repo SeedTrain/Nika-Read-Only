@@ -21,7 +21,7 @@ Other* other = new Other(configLoader, myDisplay, map, localPlayer, players);
 int readError = 1000;
 int counter = 1;
 bool leftLock = false;
-bool rightLock = true;
+bool rightLock = false;
 bool autoFire = configLoader->FEATURE_TRIGGERBOT_ON;
 int boneId = 2;
 int processingTime;
@@ -40,8 +40,8 @@ bool initializeOverlayWindow(const char* overlayTitle) {
         overlayWindow.DestroyOverlay();
         return false;
     }
-    overlayWindow.SetStyle();
     overlayWindow.CaptureInput(false);
+    overlayWindow.SetStyle();
     int screenWidth;
     int screenHeight;
     overlayWindow.GetScreenResolution(screenWidth, screenHeight);
@@ -71,6 +71,10 @@ void renderUI() {
         sense->renderESP(canvas);
         if (configLoader->FEATURE_MAP_RADAR_ON) sense->renderRadar(canvas);
         if (configLoader->FEATURE_SPECTATORS_ON) sense->renderSpectators(totalSpectators, spectators);
+        if (keymap::showMenu) {
+            overlayWindow.CaptureInput(true);
+            sense->renderMenu();
+        } else { overlayWindow.CaptureInput(false); }
     }
     ImGui::End();
 }
@@ -120,7 +124,19 @@ int main(int argc, char* argv[]) {
             }
 
             while (true) {
-                if (myDisplay->isKeyDown("XK_Home")) { system("mount -o remount,rw,hidepid=0 /proc"); return -1; }
+                if (myDisplay->isKeyDown("XK_F9")) { system("mount -o remount,rw,hidepid=0 /proc"); return -1; }
+                if (myDisplay->isKeyDown("XK_Shift_R")) { keymap::showMenu = !keymap::showMenu; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_Insert")) { data::selectedRadio++; if (data::selectedRadio < 1 || data::selectedRadio > 8) data::selectedRadio = 1; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_Delete")) { data::selectedRadio++; if (data::selectedRadio < 9 || data::selectedRadio > 15) data::selectedRadio = 9; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_Home")) { data::selectedRadio++; if (data::selectedRadio < 16 || data::selectedRadio > 20) data::selectedRadio = 16; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_End")) { data::selectedRadio++; if (data::selectedRadio < 21 || data::selectedRadio > 27) data::selectedRadio = 21; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_Page_Up")) { data::selectedRadio++; if (data::selectedRadio < 28 || data::selectedRadio > 34) data::selectedRadio = 28; util::sleep(250); }
+                if (myDisplay->isKeyDown("XK_Page_Down")) {
+                    data::selectedRadio++;
+                    if (data::selectedRadio < 75) data::selectedRadio = 75;
+                    if (data::selectedRadio > 78) data::selectedRadio = 0;
+                    util::sleep(250);
+                }
                 if (myDisplay->isKeyDown("XK_Left")) { leftLock = !leftLock; util::sleep(250); }
                 if (myDisplay->isKeyDown("XK_Right")) { rightLock = !rightLock; util::sleep(250); }
                 if (myDisplay->isKeyDown("XK_Up")) { autoFire = !autoFire; util::sleep(250); }
@@ -157,26 +173,12 @@ int main(int argc, char* argv[]) {
                 keymap::AIMBOT_ACTIVATION_KEY = true;
             else
                 keymap::AIMBOT_ACTIVATION_KEY = false;
-            int weapon = localPlayer->weaponId;
-            if (configLoader->AIMBOT_ACTIVATED_BY_MOUSE && myDisplay->isLeftMouseButtonDown() && (
-                weapon == WEAPON_SENTINEL ||
-                weapon == WEAPON_LONGBOW ||
-                weapon == WEAPON_KRABER ||
-                weapon == WEAPON_TRIPLE_TAKE)) {
-                std::chrono::milliseconds timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-                if (timeNow > keymap::timeLastShot + std::chrono::milliseconds(125)) {
-                    myDisplay->kbPress(configLoader->AIMBOT_FIRING_KEY);
-                    myDisplay->kbRelease(configLoader->AIMBOT_FIRING_KEY);
-                    keymap::AIMBOT_FIRING_KEY = false;
-                    keymap::timeLastShot = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-                }
-            }
 
             // Read players
             players->clear();
             if (counter % 99 == 0) {
                 playersCache->clear();
-                if (!rightLock)
+                if (data::selectedRadio == 79)
                     for (int i = 0; i < humanPlayers->size(); i++) {
                         Player* p = humanPlayers->at(i);
                         p->readFromMemory(configLoader, map, localPlayer, counter);
@@ -226,7 +228,7 @@ int main(int argc, char* argv[]) {
 
             // Run features
             gameCamera->update();
-            aimBot->update(leftLock, autoFire, boneId, totalSpectators);
+            aimBot->update(leftLock, rightLock, autoFire, boneId, totalSpectators);
             other->superGlide(averageFps);
 
             if (configLoader->SENSE_VERBOSE > 1) overlayWindow.Render(&renderUI);

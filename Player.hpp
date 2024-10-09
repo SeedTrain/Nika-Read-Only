@@ -9,6 +9,9 @@ struct Player {
     bool isPlayer;
     bool isDrone;
     bool isDummie;
+    bool isItem;
+    char signifierName[16] = {0};
+    uint16_t itemId;
     Vector3D localOrigin;
     Vector3D localOriginDiff;
     Vector3D localOriginPrev;
@@ -61,14 +64,59 @@ struct Player {
     void readFromMemory(ConfigLoader* cl, Level* map, LocalPlayer* lp, int counter) {
         base = mem::Read<uint64_t>(OFF_REGION + OFF_ENTITY_LIST + ((index + 1) << 5), "Player base");
         if (base == 0) return;
-        name = mem::ReadString(base + OFF_NAME, 1024, "Player name");
+        name = mem::ReadString(base + OFF_NAME, 32, "Player name");
         isPlayer = name == "player";
         isDrone = name == "drone_no_minimap_object";
-        if (map->isTrainingArea) {
+        //if (map->isTrainingArea) {
             teamNumber = mem::Read<int>(base + OFF_TEAM_NUMBER, "Player teamNumber");
             isDummie = teamNumber == 97;
-        } else { isDummie = false; }
-        if (!isPlayer && !isDrone && !isDummie) { reset(); return; }
+        //} else { isDummie = false; }
+        isItem = false;
+        if (!isPlayer && !isDrone && !isDummie) {
+            if (data::selectedRadio == 0) { reset(); return; }
+            uint64_t signifierNamePtr = mem::Read<uint64_t>(base + OFF_SIGNIFIER_NAME, "Player signifierNamePtr");
+            if (!mem::IsValidPointer(signifierNamePtr)) { reset(); return; }
+            mem::Read(signifierNamePtr, &signifierName, sizeof(signifierName));
+            size_t found = static_cast<std::string>(signifierName).find("prop_survival");
+            if (found == std::string::npos) { reset(); return; }
+            itemId = mem::Read<uint16_t>(base + OFF_ITEM_HANDLE, "Player itemId");
+            //itemId = mem::ReadInt(base + OFF_ITEM_HANDLE, "Player itemId");
+            isItem = itemId != -1 && itemId == stoi(data::items[data::selectedRadio][1]);
+            if (data::items[data::selectedRadio][0] == "LIGHT_WEAPON")
+                for (int arraySize = sizeof(data::itemsLightWeapon) / sizeof(data::itemsLightWeapon[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsLightWeapon[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "ENERGY_WEAPON")
+                for (int arraySize = sizeof(data::itemsEnergyWeapon) / sizeof(data::itemsEnergyWeapon[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsEnergyWeapon[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "SHOTGUN_WEAPON")
+                for (int arraySize = sizeof(data::itemsShotgunWeapon) / sizeof(data::itemsShotgunWeapon[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsShotgunWeapon[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "HEAVY_WEAPON")
+                for (int arraySize = sizeof(data::itemsHeavyWeapon) / sizeof(data::itemsHeavyWeapon[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsHeavyWeapon[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "SNIPER_WEAPON")
+                for (int arraySize = sizeof(data::itemsSniperWeapon) / sizeof(data::itemsSniperWeapon[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsSniperWeapon[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "EPIC_GEAR")
+                for (int arraySize = sizeof(data::itemsEpicGear) / sizeof(data::itemsEpicGear[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsEpicGear[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "LEGENDARY_GEAR")
+                for (int arraySize = sizeof(data::itemsLegendaryGear) / sizeof(data::itemsLegendaryGear[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsLegendaryGear[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "OPTIC")
+                for (int arraySize = sizeof(data::itemsOptic) / sizeof(data::itemsOptic[0]), i = 0; i < arraySize; i++)
+                    if (itemId == stoi(data::itemsOptic[i][1])) { isItem = true; break; }
+            if (data::items[data::selectedRadio][0] == "SURVIVAL")
+                if (itemId == stoi(data::items[47][1]) || itemId == stoi(data::items[48][1]) || itemId == stoi(data::items[49][1])) isItem = true;
+            if (isItem) {
+                localOrigin = mem::Read<Vector3D>(base + OFF_LOCAL_ORIGIN, "Player localOrigin");
+                isVisible = false;
+                isEnemy = true;
+                if (lp->isValid()) distance2DToLocalPlayer = lp->localOrigin.Distance2D(localOrigin);
+                return;
+            }
+            reset(); return;
+        }
         if (!map->isTrainingArea)
             teamNumber = mem::Read<int>(base + OFF_TEAM_NUMBER, "Player teamNumber");
         localOrigin = mem::Read<Vector3D>(base + OFF_LOCAL_ORIGIN, "Player localOrigin");
@@ -112,7 +160,7 @@ struct Player {
         if (lp->isValid()) {
             isLocal = base == lp->base;
             isFriendly = isSameTeam(map, lp);
-            isEnemy = !isFriendly || cl->AIMBOT_FRIENDLY_FIRE;// || map->isTrainingArea && isDrone;
+            isEnemy = !isFriendly || isItem || cl->AIMBOT_FRIENDLY_FIRE;// || map->isTrainingArea && isDrone;
             distanceToLocalPlayer = lp->localOrigin.Distance(localOrigin);
             distance2DToLocalPlayer = lp->localOrigin.Distance2D(localOrigin);
             //distance2DToLocalPlayer = lp->localOrigin.To2D().Distance(localOrigin.To2D());
@@ -120,7 +168,7 @@ struct Player {
     }
 
     bool isValid() {
-        return base != 0 && (isPlayer || isDrone || isDummie);
+        return base != 0 && (isPlayer || isDrone || isDummie || isItem);
     }
 
     bool isCombatReady() {
@@ -131,7 +179,7 @@ struct Player {
     }
 
     std::string getPlayerName(){
-        uintptr_t nameOffset = mem::Read<uintptr_t>(OFF_REGION + OFF_NAME_LIST + ((plyrDataTable - 1) * 24 ), "Player nameOffset");
+        uintptr_t nameOffset = mem::Read<uintptr_t>(OFF_REGION + OFF_NAME_LIST + ((plyrDataTable - 1) * 24), "Player nameOffset");
         std::string playerName = mem::ReadString(nameOffset, 64, "Player playerName");
         return playerName;
     }

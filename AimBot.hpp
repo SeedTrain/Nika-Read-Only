@@ -23,10 +23,10 @@ struct AimBot {
         this->gameCamera = in_gameCamera;
     }
 
-    bool active() {
+    bool active(bool rightLock) {
         bool isAimbotOn = cl->FEATURE_AIMBOT_ON;
         bool isCombatReady = lp->isCombatReady();
-        bool activatedByAds = cl->AIMBOT_ACTIVATED_BY_ADS && lp->inZoom;
+        bool activatedByAds = cl->AIMBOT_ACTIVATED_BY_ADS && rightLock && lp->inZoom;
         bool activatedByKey = keymap::AIMBOT_ACTIVATION_KEY;
         bool active = isAimbotOn && isCombatReady && (activatedByAds || activatedByKey);
         return active;
@@ -128,14 +128,14 @@ struct AimBot {
         return wayB;
     }
 
-    void update(bool leftLock, bool autoFire, int boneId, int totalSpectators) {
+    void update(bool leftLock, bool rightLock, bool autoFire, int boneId, int totalSpectators) {
         if (keymap::AIMBOT_FIRING_KEY && (!keymap::AIMBOT_ACTIVATION_KEY || currentTarget != nullptr && !currentTarget->isVisible)) {
             myDisplay->kbRelease(cl->AIMBOT_FIRING_KEY);
             keymap::AIMBOT_FIRING_KEY = false;
         }
 
         if (lp->grippingGrenade){ releaseTarget(); return; }
-        if (!active()) { releaseTarget(); return; }
+        if (!active(rightLock)) { releaseTarget(); return; }
 
         if (lp->inZoom) {
             finalFov = cl->AIMBOT_FOV * lp->zoomFov / 60;
@@ -200,7 +200,7 @@ struct AimBot {
         else
             if (!currentTarget->isDrone && (!leftLock || cl->AIMBOT_SPECTATORS_WEAKEN && totalSpectators > 0)) {
                 totalSmooth *= (cl->AIMBOT_WEAKEN + 1) / 2;
-                bulletSpeed /= cl->AIMBOT_WEAKEN;
+                bulletSpeed /= (cl->AIMBOT_WEAKEN + 1) / 2;
             }
 
         Vector2D aimbotDelta = desiredAnglesIncrement.Multiply(cl->AIMBOT_SPEED).Divide(totalSmooth);
@@ -265,8 +265,8 @@ struct AimBot {
         gameCamera->worldToScreen(targetBone3DCache, targetBoneW2S);
         int weapon = lp->weaponId;
         if (weapon != WEAPON_SENTINEL &&
-            weapon != WEAPON_BOCEK &&
-            weapon != WEAPON_CHARGE_RIFLE &&
+            //weapon != WEAPON_BOCEK &&
+            //weapon != WEAPON_CHARGE_RIFLE &&
             weapon != WEAPON_LONGBOW &&
             weapon != WEAPON_G7 &&
             weapon != WEAPON_HEMLOCK &&
@@ -280,14 +280,15 @@ struct AimBot {
             weapon != WEAPON_3030 &&
             weapon != WEAPON_NEMESIS &&
             weapon != WEAPON_MELEE &&
-            weapon != WEAPON_THROWING_KNIFE &&
+            //weapon != WEAPON_THROWING_KNIFE &&
             autoFire && !keymap::AIMBOT_FIRING_KEY && keymap::AIMBOT_ACTIVATION_KEY &&
             abs(targetBoneW2S.x - screenSize.x/2) < width &&
             abs(targetBoneW2S.y - screenSize.y/2) < width) {
             myDisplay->kbPress(cl->AIMBOT_FIRING_KEY);
             keymap::AIMBOT_FIRING_KEY = true;
         } else {
-            if (weapon == WEAPON_G7 ||
+            if (myDisplay->isLeftMouseButtonDown() && (weapon == WEAPON_SENTINEL || weapon == WEAPON_LONGBOW || weapon == WEAPON_KRABER || weapon == WEAPON_TRIPLE_TAKE) ||
+		weapon == WEAPON_G7 ||
                 weapon == WEAPON_HEMLOCK ||
                 weapon == WEAPON_MASTIFF ||
                 weapon == WEAPON_PROWLER ||
@@ -296,7 +297,8 @@ struct AimBot {
                 weapon == WEAPON_TRIPLE_TAKE && !lp->inZoom ||
                 weapon == WEAPON_WINGMAN ||
                 weapon == WEAPON_3030 ||
-                weapon == WEAPON_NEMESIS)
+                weapon == WEAPON_NEMESIS ||
+		weapon == WEAPON_MELEE)
                 if (autoFire && keymap::AIMBOT_ACTIVATION_KEY &&
                     abs(targetBoneW2S.x - screenSize.x/2) < width &&
                     abs(targetBoneW2S.y - screenSize.y/2) < width) {

@@ -11,7 +11,7 @@ GlobalVars=$(sed -nr ":l /^GlobalVars[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" .
 NameList=$(sed -nr ":l /^NameList[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 ViewRender=$(sed -nr ":l /^ViewRender[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 ViewMatrix=$(sed -nr ":l /^ViewMatrix[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
-LevelName=$(sed -nr ":l /^LevelName[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
+ClientState=$(sed -nr ":l /^ClientState[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 projectile_launch_speed=$(sed -nr ":l /^projectile_launch_speed[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 base=$(sed -nr ":l /^base[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 camera_origin=$(sed -nr ":l /^CPlayer!camera_origin[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
@@ -31,6 +31,8 @@ m_iHealth=$(sed -nr ":l /^m_iHealth[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$
 m_lifeState=$(sed -nr ":l /^m_lifeState[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 m_bleedoutState=$(sed -nr ":l /^m_bleedoutState[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 m_xp=$(sed -nr ":l /^m_xp[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
+m_iSignifierName=$(sed -nr ":l /^m_iSignifierName[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
+m_customScriptInt=$(sed -nr ":l /^m_customScriptInt[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
 m_weaponNameIndex=$(sed -nr "/^\[RecvTable.DT_WeaponX\]/ { :l /^m_weaponNameIndex[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" ./$target.txt)
 m_vecAbsOrigin=$(sed -nr "/^\[DataMap.C_BaseEntity\]/ { :l /^m_vecAbsOrigin[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;}" ./$target.txt)
 m_bZooming=$(sed -nr ":l /^m_bZooming[ ]*=/ { s/[^=]*=[ ]*//; p; q;}; n; b l;" ./$target.txt)
@@ -63,7 +65,6 @@ GlobalVars=$(parse_hpp GlobalVars "constexpr long OFF_GLOBAL_VARS")
 NameList=$(parse_hpp NameList "constexpr long OFF_NAME_LIST")
 ViewRender=$(parse_hpp ViewRender "constexpr long OFF_VIEW_RENDER")
 ViewMatrix=$(parse_hpp ViewMatrix "constexpr long OFF_VIEW_MATRIX")
-LevelName=$(parse_hpp LevelName "constexpr long OFF_LEVEL_NAME")
 camera_origin=$(parse_hpp camera_origin "constexpr long OFF_CAMERA_ORIGIN")
 m_pStudioHdr=$(parse_hpp m_pStudioHdr "constexpr long OFF_STUDIO_HDR")
 m_latestPrimaryWeapons=$(parse_hpp m_latestPrimaryWeapons "constexpr long OFF_WEAPON_HANDLE")
@@ -80,12 +81,13 @@ m_iHealth=$(parse_hpp m_iHealth "constexpr long OFF_HEALTH")
 m_lifeState=$(parse_hpp m_lifeState "constexpr long OFF_LIFE_STATE")
 m_bleedoutState=$(parse_hpp m_bleedoutState "constexpr long OFF_BLEEDOUT_STATE")
 m_xp=$(parse_hpp m_xp "constexpr long OFF_XP_LEVEL")
+m_iSignifierName=$(parse_hpp m_iSignifierName "constexpr long OFF_SIGNIFIER_NAME")
+m_customScriptInt=$(parse_hpp m_customScriptInt "constexpr long OFF_ITEM_HANDLE")
 m_weaponNameIndex=$(parse_hpp m_weaponNameIndex "constexpr long OFF_WEAPON_INDEX")
 m_vecAbsOrigin=$(parse_hpp m_vecAbsOrigin "constexpr long OFF_LOCAL_ORIGIN")
 m_bZooming=$(parse_hpp m_bZooming "constexpr long OFF_ZOOMING")
 timeBase=$(parse_hpp timeBase "constexpr long OFF_TIME_BASE")
 mp_gamemode=$(parse_hpp mp_gamemode "constexpr long OFF_GAME_MODE")
-gamepad_aim_assist_melee=$(parse_hpp gamepad_aim_assist_melee "constexpr long OFF_OBSERVER_LIST")
 m_gameTimescale=$(parse_hpp m_gameTimescale "constexpr long OFF_OBSERVER_ARRAY")
 
 cp Offsets.hpp Offsets.tmp
@@ -100,7 +102,13 @@ echo "constexpr long OFF_GLOBAL_VARS = ${GlobalVars}; //[Miscellaneous]->GlobalV
 echo "constexpr long OFF_NAME_LIST = ${NameList}; //[Miscellaneous]->NameList" >> Offsets.hpp
 echo "constexpr long OFF_VIEW_RENDER = ${ViewRender}; //[Miscellaneous]->ViewRender" >> Offsets.hpp
 echo "constexpr long OFF_VIEW_MATRIX = ${ViewMatrix}; //[Miscellaneous]->ViewMatrix" >> Offsets.hpp
-echo "constexpr long OFF_LEVEL_NAME = ${LevelName}; //[Miscellaneous]->LevelName" >> Offsets.hpp
+if [[ "$ClientState" == "" ]]; then
+  ClientState=$(sed -n -e "s/constexpr long OFF_LEVEL_NAME\s*=\s*//p" Offsets.tmp)
+  ClientState=${ClientState%%;*}
+  echo "constexpr long OFF_LEVEL_NAME = $ClientState; //[Miscellaneous]->ClientState + 0x01c4" >> Offsets.hpp
+else
+  echo "constexpr long OFF_LEVEL_NAME = ${ClientState%%[[:cntrl:]]} + 0x01c4; //[Miscellaneous]->ClientState + 0x01c4" >> Offsets.hpp
+fi
 if [[ "$projectile_launch_speed" == "" ]] || [[ "$base" == "" ]] || [[ ${base%%[[:cntrl:]]} == 0x0000 ]]; then
   m_flProjectileSpeed=$(sed -n -e "s/constexpr long OFF_PROJECTILE_SPEED\s*=\s*//p" Offsets.tmp)
   m_flProjectileSpeed=${m_flProjectileSpeed%%;*}
@@ -138,6 +146,9 @@ echo "constexpr long OFF_HEALTH = ${m_iHealth}; //[RecvTable.DT_Player]->m_iHeal
 echo "constexpr long OFF_LIFE_STATE = ${m_lifeState}; //[RecvTable.DT_Player]->m_lifeState" >> Offsets.hpp
 echo "constexpr long OFF_BLEEDOUT_STATE = ${m_bleedoutState}; //[RecvTable.DT_Player]->m_bleedoutState" >> Offsets.hpp
 echo "constexpr long OFF_XP_LEVEL = ${m_xp}; //[RecvTable.DT_Player]->m_xp" >> Offsets.hpp
+echo "// [RecvTable.DT_PropSurvival]" >> Offsets.hpp
+echo "constexpr long OFF_SIGNIFIER_NAME = ${m_iSignifierName}; //[RecvTable.DT_PropSurvival]->m_iSignifierName" >> Offsets.hpp
+echo "constexpr long OFF_ITEM_HANDLE = ${m_customScriptInt}; //[RecvTable.DT_PropSurvival]->m_customScriptInt" >> Offsets.hpp
 echo "// [RecvTable.DT_WeaponX]" >> Offsets.hpp
 echo "constexpr long OFF_WEAPON_INDEX = ${m_weaponNameIndex}; //[RecvTable.DT_WeaponX]->m_weaponNameIndex" >> Offsets.hpp
 echo "// [DataMap.C_BaseEntity]" >> Offsets.hpp

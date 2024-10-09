@@ -26,13 +26,15 @@
 * [x] Hold SHIFT to **lock on target** and **triggerbot** auto fire
 * [x] Hold CAPS_LOCK to **super glide**
 * [x] Increase/decrease **aimbot** strength with CURSOR_LEFT; "**<**" symbol in the upper left corner of the screen
-* [x] Toggle **non-player targeting** (drones + dummies) with CURSOR_RIGHT; "**>**" symbol in the upper left corner of the screen
+* [x] Toggle **ADS locking** with CURSOR_RIGHT; "**>**" symbol in the upper left corner of the screen
 * [x] Disable/enable **triggerbot** auto fire with CURSOR_UP; "**^**" symbol in the upper left corner of the screen
 - **Bind X in-game to fire, triggerbot will use that key** (default AIMBOT_FIRING_KEY)
 - **Unbind LMB (Left Mouse Button) in-game from fire, so that the cheat will fire for you instead** (AIMBOT_ACTIVATED_BY_MOUSE default YES)
 * [x] Toggle hitbox with CURSOR_DOWN; `body`/`neck`/`head` text in the upper left corner of the screen
 * [x] Efficient entities cache, enabling Crypto drone targeting
-* [x] Terminate process with HOME
+* [x] Press RIGHT_SHIFT to select Item ESP
+* [x] Press INSERT / DELETE / HOME / END / PAGE_UP / PAGE_DOWN to cycle LIGHT / ENERGY / SHOTGUN / HEAVY / SNIPER / GEAR items
+* [x] Terminate process with F9
 
 ## Notes
 
