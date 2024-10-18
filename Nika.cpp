@@ -18,12 +18,13 @@ AimBot* aimBot = new AimBot(configLoader, myDisplay, localPlayer, players, gameC
 Sense* sense = new Sense(configLoader, localPlayer, players, gameCamera, aimBot);
 Other* other = new Other(configLoader, myDisplay, map, localPlayer, players);
 
+int interval = 1000 / configLoader->AIMBOT_HZ;
 int readError = 1000;
 int counter = 1;
 bool leftLock = false;
 bool rightLock = false;
 bool autoFire = configLoader->FEATURE_TRIGGERBOT_ON;
-int boneId = 2;
+int boneId = 1;
 int processingTime;
 std::vector<int> processingTimes;
 double averageProcessingTime;
@@ -79,6 +80,21 @@ void renderUI() {
     ImGui::End();
 }
 
+void shootAtEnemy(Player* p, std::chrono::milliseconds timeNow) {
+    if (autoFire && p->isAimedAt && p->isEnemy && p->isCombatReady()
+        && timeNow > keymap::timeLastShot + std::chrono::milliseconds(125) && localPlayer->isCombatReady()
+        && util::inchesToMeters(p->distanceToLocalPlayer) < configLoader->TRIGGERBOT_HIPFIRE_RANGE) {
+        int weapon = localPlayer->weaponId;
+        if (weapon == WEAPON_MASTIFF || weapon == WEAPON_PEACEKEEPER) {
+            //myDisplay->mouseClickLeft();
+            myDisplay->kbPress(configLoader->AIMBOT_FIRING_KEY);
+            myDisplay->kbRelease(configLoader->AIMBOT_FIRING_KEY);
+            keymap::AIMBOT_FIRING_KEY = false;
+            keymap::timeLastShot = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (getuid()) { std::cout << "RUN AS ROOT!\n"; return -1; }
     printf("Offsets.hpp %s\n", OFF_GAME_VERSION);
@@ -120,6 +136,7 @@ int main(int argc, char* argv[]) {
                 myDisplay->kbRelease(configLoader->AIMBOT_FIRING_KEY);
                 keymap::AIMBOT_FIRING_KEY = false;
                 playersCache->clear();
+                localPlayer->worldTimePrev = 0.0f;
                 other->traversalStartTimePrev = 0.0f;
             }
 
@@ -175,20 +192,21 @@ int main(int argc, char* argv[]) {
                 keymap::AIMBOT_ACTIVATION_KEY = false;
 
             // Read players
+            std::chrono::milliseconds timeNow = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
             players->clear();
-            if (counter % 99 == 0) {
+            if (counter % 199 == 0) {
                 playersCache->clear();
                 if (data::selectedRadio == 79)
                     for (int i = 0; i < humanPlayers->size(); i++) {
                         Player* p = humanPlayers->at(i);
                         p->readFromMemory(configLoader, map, localPlayer, counter);
-                        if (p->isValid()) { playersCache->push_back(p); players->push_back(p); }
+                        if (p->isValid()) { shootAtEnemy(p, timeNow); players->push_back(p); playersCache->push_back(p); }
                     }
                 else
                     for (int i = 0; i < dummyPlayers->size(); i++) {
                         Player* p = dummyPlayers->at(i);
                         p->readFromMemory(configLoader, map, localPlayer, counter);
-                        if (p->isValid()) { playersCache->push_back(p); players->push_back(p); }
+                        if (p->isValid()) { shootAtEnemy(p, timeNow); players->push_back(p); playersCache->push_back(p); }
                     }
 
                 if (configLoader->SENSE_VERBOSE > 0) {
@@ -222,21 +240,22 @@ int main(int argc, char* argv[]) {
                 for (int i = 0; i < playersCache->size(); i++) {
                     Player* p = playersCache->at(i);
                     p->readFromMemory(configLoader, map, localPlayer, counter);
-                    if (p->isValid()) players->push_back(p);
+                    if (p->isValid()) { shootAtEnemy(p, timeNow); players->push_back(p); }
                 }
             }
 
             // Run features
             gameCamera->update();
-            aimBot->update(leftLock, rightLock, autoFire, boneId, totalSpectators);
+            if (counter % configLoader->AIMBOT_DELAY == 0)
+                aimBot->update(leftLock, rightLock, autoFire, boneId, totalSpectators);
             other->superGlide(averageFps);
 
             if (configLoader->SENSE_VERBOSE > 1) overlayWindow.Render(&renderUI);
             processingTime = static_cast<int>(util::currentEpochMillis() - startTime);
-            int goalSleepTime = 16.67; // 16.67ms=60Hz | 6.94ms=144Hz
+            int goalSleepTime = interval; // 16.67ms=60Hz | 6.94ms=144Hz
             int timeLeftToSleep = std::max(0, goalSleepTime - processingTime);
             util::sleep(timeLeftToSleep);
-            if (counter % 100 == 0) {
+            if (counter % 200 == 0) {
                 if (configLoader->SENSE_VERBOSE > 0) {
                     printf("%d %d %d ", leftLock, autoFire, rightLock);
                     if (boneId == 0) printf("HEAD\n");

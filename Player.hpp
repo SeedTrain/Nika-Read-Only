@@ -10,7 +10,7 @@ struct Player {
     bool isDrone;
     bool isDummie;
     bool isItem;
-    char signifierName[16] = {0};
+    char signifierName[16];
     uint16_t itemId;
     Vector3D localOrigin;
     Vector3D localOriginDiff;
@@ -35,9 +35,8 @@ struct Player {
     bool isKnocked;
     int currentHealth;
     int currentShield;
-    //int lastTimeAimedAt;
-    //bool isAimedAt;
-    //int lastTimeAimedAtPrev;
+    float lastTimeAimedAt;
+    bool isAimedAt;
     float lastTimeVisible;
     bool isVisible;
     bool isLocal;
@@ -76,6 +75,7 @@ struct Player {
             if (data::selectedRadio == 0) { reset(); return; }
             uint64_t signifierNamePtr = mem::Read<uint64_t>(base + OFF_SIGNIFIER_NAME, "Player signifierNamePtr");
             if (!mem::IsValidPointer(signifierNamePtr)) { reset(); return; }
+            signifierName[16] = {0};
             mem::Read(signifierNamePtr, &signifierName, sizeof(signifierName));
             size_t found = static_cast<std::string>(signifierName).find("prop_survival");
             if (found == std::string::npos) { reset(); return; }
@@ -125,21 +125,23 @@ struct Player {
             localOriginDiff = localOrigin.Subtract(localOriginPrev).Add(localOriginPrev.Subtract(localOriginPrev2)).Add(localOriginPrev2.Subtract(localOriginPrev3)).Add(localOriginPrev3.Subtract(localOriginPrev4));
             timeLocalOriginDiff = (timeLocalOrigin - timeLocalOriginPrev) + (timeLocalOriginPrev - timeLocalOriginPrev2) + (timeLocalOriginPrev2 - timeLocalOriginPrev3) + (timeLocalOriginPrev3 - timeLocalOriginPrev4);
             absoluteVelocity = localOriginDiff.Divide(timeLocalOriginDiff); // v = d/t
-            localOriginPrev4 = localOriginPrev3;
-            localOriginPrev3 = localOriginPrev2;
-            localOriginPrev2 = localOriginPrev;
-            localOriginPrev = localOrigin;
-            timeLocalOriginPrev4 = timeLocalOriginPrev3;
-            timeLocalOriginPrev3 = timeLocalOriginPrev2;
-            timeLocalOriginPrev2 = timeLocalOriginPrev;
-            timeLocalOriginPrev = timeLocalOrigin;
+            if (lp->worldTimePrev = lp->worldTime) {
+                localOriginPrev4 = localOriginPrev3;
+                localOriginPrev3 = localOriginPrev2;
+                localOriginPrev2 = localOriginPrev;
+                localOriginPrev = localOrigin;
+                timeLocalOriginPrev4 = timeLocalOriginPrev3;
+                timeLocalOriginPrev3 = timeLocalOriginPrev2;
+                timeLocalOriginPrev2 = timeLocalOriginPrev;
+                timeLocalOriginPrev = timeLocalOrigin;
+            }
         //} else {
         //    absoluteVelocity = mem::Read<Vector3D>(base + OFF_ABS_VELOCITY, "Player absoluteVelocity");
         if (isPlayer) {
             viewAngles = mem::Read<Vector2D>(base + OFF_VIEW_ANGLES, "Player viewAngles");
             viewYaw = mem::Read<float>(base + OFF_YAW, "Player viewYaw");
             plyrDataTable = mem::Read<int>(base + OFF_NAME_INDEX, "Player plyrDataTable");
-            if (cl->FEATURE_SPECTATORS_ON && counter % 99 == 0) {
+            if (cl->FEATURE_SPECTATORS_ON && counter % 199 == 0) {
                 spectators = mem::Read<uint64_t>(OFF_REGION + OFF_OBSERVER_LIST, "Player spectators");
                 spctrIndex = mem::Read<int>(spectators + plyrDataTable * 8 + OFF_OBSERVER_ARRAY, "Player spctrIndex");
                 spctrBase = mem::Read<uint64_t>(OFF_REGION + OFF_ENTITY_LIST + ((spctrIndex & 0xFFFF) << 5), "Player spctrBase");
@@ -150,9 +152,8 @@ struct Player {
         currentHealth = mem::Read<int>(base + OFF_HEALTH, "Player currentHealth");
         currentShield = mem::Read<int>(base + OFF_SHIELD, "Player currentShield");
 
-        //lastTimeAimedAt = mem::Read<int>(base + OFF_LAST_AIMEDAT_TIME, "Player lastTimeAimedAt");
-        //isAimedAt = lastTimeAimedAtPrev < lastTimeAimedAt;
-        //lastTimeAimedAtPrev = lastTimeAimedAt;
+        lastTimeAimedAt = mem::Read<float>(base + OFF_LAST_AIMEDAT_TIME, "Player lastTimeAimedAt");
+        isAimedAt = (lastTimeAimedAt + 0.2f) > lp->worldTime;
 
         lastTimeVisible = mem::Read<float>(base + OFF_LAST_VISIBLE_TIME, "Player lastTimeVisible");
         isVisible = (lastTimeVisible + 0.3f) > lp->worldTime || isDrone;
